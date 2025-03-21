@@ -17,7 +17,7 @@ mod types {
 }
 
 pub enum RuntimeCall {
-	
+	Balances(balances::Call<Runtime>),
 }
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl Runtime {
 	fn execute_block(&mut self, block: types::Block) -> support::DispatchResult {
 		self.system.inc_block_number();
 		if block.header.block_number != self.system.block_number() {
-			return Err("block number does not match what is expected")
+			return Err("block number does not match what is expected");
 		}
 		
 		
@@ -69,7 +69,11 @@ impl crate::support::Dispatch for Runtime {
 	type Call = RuntimeCall;
 
     fn dispatch(&mut self, caller: Self::Caller, call: Self::Call) -> DispatchResult {
-        unimplemented!();
+        match call {
+			RuntimeCall::Balances(call) => {
+				self.balances.dispatch(caller, call)
+			}
+		}
     }
 }
 
@@ -78,14 +82,21 @@ fn main() {
     
     runtime.balances.set_balance(&"alice".to_string(), 100);
 
-    runtime.system.inc_block_number();
-    assert_eq!(runtime.system.block_number(), 1);
+	let block_1 = types::Block {
+		header: types::Header { block_number: 1 },
+		extrinsics: vec![
+			support::Extrinsic {
+				caller: "alice".to_string(),
+				call: RuntimeCall::Balances(balances::Call::Transfer { to: "bob".to_string(), amount: 30 }),
+			},
+			support::Extrinsic {
+				caller: "alice".to_string(),
+				call: RuntimeCall::Balances(balances::Call::Transfer { to: "charlie".to_string(), amount: 20 }),
+			},
+		]
+	};
 
-    runtime.system.inc_nonce(&"alice".to_string());
-    let _res = runtime.balances.transfer(&"alice".to_string(), &"bob".to_string(), 30).map_err(|e| println!("{}", e));
-
-    runtime.system.inc_nonce(&"alice".to_string());
-    let _res = runtime.balances.transfer(&"alice".to_string(), &"charlie".to_string(), 20).map_err(|e| println!("{}", e));
+    runtime.execute_block(block_1).expect("invalid block");
 
     println!("{:#?}", runtime);
 
